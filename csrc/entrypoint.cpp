@@ -41,27 +41,27 @@ static thread_local ThreadLocalConfig thread_local_config;
 // ------------------------------------------------- entrypoints :: hook ------------------------------------------------
 
 #ifdef TMS_HOOK_MODE_PRELOAD
-cudaError_t cudaMalloc(void **ptr, size_t size) {
+musaError_t musaMalloc(void **ptr, size_t size) {
     if (thread_local_config.is_interesting_region()) {
         return TorchMemorySaver::instance().malloc(
-            ptr, CUDAUtils::cu_ctx_get_device(), size, thread_local_config.current_tag_, thread_local_config.enable_cpu_backup());
+            ptr, MUSAUtils::mu_ctx_get_device(), size, thread_local_config.current_tag_, thread_local_config.enable_cpu_backup());
     } else {
-        return APIForwarder::call_real_cuda_malloc(ptr, size);
+        return APIForwarder::call_real_musa_malloc(ptr, size);
     }
 }
 
-cudaError_t cudaFree(void *ptr) {
+musaError_t musaFree(void *ptr) {
     if (thread_local_config.is_interesting_region()) {
         return TorchMemorySaver::instance().free(ptr);
     } else {
-        return APIForwarder::call_real_cuda_free(ptr);
+        return APIForwarder::call_real_musa_free(ptr);
     }
 }
 #endif
 
 #ifdef TMS_HOOK_MODE_TORCH
 extern "C" {
-void *tms_torch_malloc(ssize_t size, int device, cudaStream_t stream) {
+void *tms_torch_malloc(ssize_t size, int device, musaStream_t stream) {
 #ifdef TMS_DEBUG_LOG
     std::cout << "[torch_memory_saver.cpp] tms_torch_malloc "
               << " size=" << size << " device=" << device << " stream=" << stream
@@ -69,19 +69,19 @@ void *tms_torch_malloc(ssize_t size, int device, cudaStream_t stream) {
 #endif
     SIMPLE_CHECK(thread_local_config.is_interesting_region(), "only support interesting region");
     void *ptr;
-    CUDA_ERROR_CHECK(TorchMemorySaver::instance().malloc(
-        &ptr, CUDAUtils::cu_device_get(device), size, thread_local_config.current_tag_, thread_local_config.enable_cpu_backup()));
+    MUSA_ERROR_CHECK(TorchMemorySaver::instance().malloc(
+        &ptr, MUSAUtils::mu_device_get(device), size, thread_local_config.current_tag_, thread_local_config.enable_cpu_backup()));
     return ptr;
 }
 
-void tms_torch_free(void *ptr, ssize_t ssize, int device, cudaStream_t stream) {
+void tms_torch_free(void *ptr, ssize_t ssize, int device, musaStream_t stream) {
 #ifdef TMS_DEBUG_LOG
     std::cout << "[torch_memory_saver.cpp] tms_torch_free "
               << " ptr=" << ptr << " ssize=" << ssize << " device=" << device << " stream=" << stream
               << std::endl;
 #endif
     SIMPLE_CHECK(thread_local_config.is_interesting_region(), "only support interesting region");
-    CUDA_ERROR_CHECK(TorchMemorySaver::instance().free(ptr));
+    MUSA_ERROR_CHECK(TorchMemorySaver::instance().free(ptr));
 }
 }
 #endif

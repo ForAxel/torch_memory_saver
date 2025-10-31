@@ -4,8 +4,8 @@
 #include "macro.h"
 
 namespace APIForwarder {
-    using CudaMallocFunc = cudaError_t (*)(void**, size_t);
-    using CudaFreeFunc = cudaError_t (*)(void*);
+    using MusaMallocFunc = musaError_t (*)(void**, size_t);
+    using MusaFreeFunc = musaError_t (*)(void*);
 
     static void *check_dlsym(void *value) {
         if (nullptr == value) {
@@ -15,18 +15,18 @@ namespace APIForwarder {
         return value;
     }
 
-    static CudaMallocFunc real_cuda_malloc_ = NULL;
-    static CudaFreeFunc real_cuda_free_ = NULL;
+    static MusaMallocFunc real_musa_malloc_ = NULL;
+    static MusaFreeFunc real_musa_free_ = NULL;
 
-    cudaError_t call_real_cuda_malloc(void **ptr, size_t size) {
-        if (C10_UNLIKELY(nullptr == real_cuda_malloc_)) {
-            real_cuda_malloc_ = (CudaMallocFunc) check_dlsym(dlsym(RTLD_NEXT, "cudaMalloc"));
+    musaError_t call_real_musa_malloc(void **ptr, size_t size) {
+        if (C10_UNLIKELY(nullptr == real_musa_malloc_)) {
+            real_musa_malloc_ = (MusaMallocFunc) check_dlsym(dlsym(RTLD_NEXT, "musaMalloc"));
         }
 
-        cudaError_t ret = real_cuda_malloc_(ptr, size);
+        musaError_t ret = real_musa_malloc_(ptr, size);
 
 #ifdef TMS_DEBUG_LOG
-        std::cout << "[torch_memory_saver.cpp] cudaMalloc [MODE NORMAL]"
+        std::cout << "[torch_memory_saver.cpp] musaMalloc [MODE NORMAL]"
                   << " ptr=" << ptr << " *ptr=" << *ptr << " size=" << size << " ret=" << ret
                   << std::endl;
 #endif
@@ -34,15 +34,15 @@ namespace APIForwarder {
         return ret;
     }
 
-    cudaError_t call_real_cuda_free(void *ptr) {
-        if (C10_UNLIKELY(nullptr == real_cuda_free_)) {
-            real_cuda_free_ = (CudaFreeFunc) check_dlsym(dlsym(RTLD_NEXT, "cudaFree"));
+    musaError_t call_real_musa_free(void *ptr) {
+        if (C10_UNLIKELY(nullptr == real_musa_free_)) {
+            real_musa_free_ = (MusaFreeFunc) check_dlsym(dlsym(RTLD_NEXT, "musaFree"));
         }
 
-        cudaError_t ret = real_cuda_free_(ptr);
+        musaError_t ret = real_musa_free_(ptr);
 
 #ifdef TMS_DEBUG_LOG
-        std::cout << "[torch_memory_saver.cpp] cudaFree [MODE NORMAL]"
+        std::cout << "[torch_memory_saver.cpp] musaFree [MODE NORMAL]"
                   << " ptr=" << ptr << " ret=" << ret
                   << std::endl;
 #endif

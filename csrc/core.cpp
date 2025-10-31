@@ -14,21 +14,21 @@ TorchMemorySaver &TorchMemorySaver::instance() {
     return instance;
 }
 
-cudaError_t TorchMemorySaver::malloc(void **ptr, CUdevice device, size_t size, const std::string& tag, const bool enable_cpu_backup) {
+musaError_t TorchMemorySaver::malloc(void **ptr, MUdevice device, size_t size, const std::string& tag, const bool enable_cpu_backup) {
 #if defined(USE_ROCM)
     return ROCmHIPImplementation::rocm_malloc(ptr, device, size, tag, enable_cpu_backup, allocation_metadata_, allocator_metadata_mutex_);
 
 #elif defined(USE_CUDA)
-    CUmemGenericAllocationHandle allocHandle;
+    MUmemGenericAllocationHandle allocHandle;
 
-    cudaError_t ret = CUDAUtils::cu_mem_create(&allocHandle, size, device);
-    if (ret != cudaSuccess) {
+    musaError_t ret = MUSAUtils::mu_mem_create(&allocHandle, size, device);
+    if (ret != musaSuccess) {
         return ret;
     }
 
-    CURESULT_CHECK(cuMemAddressReserve((CUdeviceptr *) ptr, size, 0, 0, 0));
-    CURESULT_CHECK(cuMemMap((CUdeviceptr) * ptr, size, 0, allocHandle, 0));
-    CUDAUtils::cu_mem_set_access(*ptr, size, device);
+    MURESULT_CHECK(muMemAddressReserve((MUdeviceptr *) ptr, size, 0, 0, 0));
+    MURESULT_CHECK(muMemMap((MUdeviceptr) * ptr, size, 0, allocHandle, 0));
+    MUSAUtils::mu_mem_set_access(*ptr, size, device);
 
     {
         const std::lock_guard<std::mutex> lock(allocator_metadata_mutex_);
@@ -39,7 +39,7 @@ cudaError_t TorchMemorySaver::malloc(void **ptr, CUdevice device, size_t size, c
     }
 
 #ifdef TMS_DEBUG_LOG
-    std::cout << "[torch_memory_saver.cpp] TorchMemorySaver.cuda_malloc "
+    std::cout << "[torch_memory_saver.cpp] TorchMemorySaver.musa_malloc "
               << " ptr=" << ptr << " *ptr=" << *ptr << " size=" << size
               << " allocHandle=" << allocHandle << " tag=" << tag
               << std::endl;
@@ -48,10 +48,10 @@ cudaError_t TorchMemorySaver::malloc(void **ptr, CUdevice device, size_t size, c
 #else
     #error "USE_PLATFORM is not set"
 #endif
-    return cudaSuccess;
+    return musaSuccess;
 }
 
-cudaError_t TorchMemorySaver::free(void *ptr) {
+musaError_t TorchMemorySaver::free(void *ptr) {
 #if defined(USE_ROCM)
     return ROCmHIPImplementation::rocm_free(ptr, allocation_metadata_, allocator_metadata_mutex_);
 
@@ -60,24 +60,24 @@ cudaError_t TorchMemorySaver::free(void *ptr) {
     {
         const std::lock_guard <std::mutex> lock(allocator_metadata_mutex_);
         if (allocation_metadata_.count(ptr) == 0) {
-            return APIForwarder::call_real_cuda_free(ptr);
+            return APIForwarder::call_real_musa_free(ptr);
         }
 
         metadata = allocation_metadata_[ptr];
         allocation_metadata_.erase(ptr);
     }
 
-    CURESULT_CHECK(cuMemUnmap((CUdeviceptr) ptr, metadata.size));
-    CURESULT_CHECK(cuMemRelease(metadata.allocHandle));
-    CURESULT_CHECK(cuMemAddressFree((CUdeviceptr) ptr, metadata.size));
+    MURESULT_CHECK(muMemUnmap((MUdeviceptr) ptr, metadata.size));
+    MURESULT_CHECK(muMemRelease(metadata.allocHandle));
+    MURESULT_CHECK(muMemAddressFree((MUdeviceptr) ptr, metadata.size));
 
     if (nullptr != metadata.cpu_backup) {
-        CUDA_ERROR_CHECK(cudaFreeHost(metadata.cpu_backup));
+        MUSA_ERROR_CHECK(musaFreeHost(metadata.cpu_backup));
         metadata.cpu_backup = nullptr;
     }
 
 #ifdef TMS_DEBUG_LOG
-    std::cout << "[torch_memory_saver.cpp] TorchMemorySaver.cuda_free "
+    std::cout << "[torch_memory_saver.cpp] TorchMemorySaver.musa_free "
               << " ptr=" << ptr << " metadata.size=" << metadata.size
               << " metadata.allocHandle=" << metadata.allocHandle << " tag=" << metadata.tag
               << std::endl;
@@ -86,7 +86,7 @@ cudaError_t TorchMemorySaver::free(void *ptr) {
 #else
     #error "USE_PLATFORM is not set"
 #endif
-    return cudaSuccess;
+    return musaSuccess;
 }
 
 void TorchMemorySaver::pause(const std::string& tag) {
@@ -114,15 +114,15 @@ void TorchMemorySaver::pause(const std::string& tag) {
 
         if (metadata.enable_cpu_backup) {
             if (nullptr == metadata.cpu_backup) {
-                CUDA_ERROR_CHECK(cudaMallocHost(&metadata.cpu_backup, metadata.size));
+                MUSA_ERROR_CHECK(musaMallocHost(&metadata.cpu_backup, metadata.size));
             }
             SIMPLE_CHECK(metadata.cpu_backup != nullptr, "cpu_backup should not be nullptr");
-            // TODO may use cudaMemcpyAsync if needed
-            CUDA_ERROR_CHECK(cudaMemcpy(metadata.cpu_backup, ptr, metadata.size, cudaMemcpyDeviceToHost));
+            // TODO may use musaMemcpyAsync if needed
+            MUSA_ERROR_CHECK(musaMemcpy(metadata.cpu_backup, ptr, metadata.size, musaMemcpyDeviceToHost));
         }
 
-        CURESULT_CHECK(cuMemUnmap((CUdeviceptr) ptr, metadata.size));
-        CURESULT_CHECK(cuMemRelease(metadata.allocHandle));
+        MURESULT_CHECK(muMemUnmap((MUdeviceptr) ptr, metadata.size));
+        MURESULT_CHECK(muMemRelease(metadata.allocHandle));
 
         metadata.state = AllocationState::PAUSED;
 
@@ -162,17 +162,17 @@ void TorchMemorySaver::resume(const std::string& tag) {
             exit(1);
         }
 
-        CUmemGenericAllocationHandle newAllocHandle;
-        CUDA_ERROR_CHECK(CUDAUtils::cu_mem_create(&newAllocHandle, metadata.size, metadata.device));
+        MUmemGenericAllocationHandle newAllocHandle;
+        MUSA_ERROR_CHECK(MUSAUtils::mu_mem_create(&newAllocHandle, metadata.size, metadata.device));
 
-        CURESULT_CHECK(cuMemMap((CUdeviceptr) ptr, metadata.size, 0, newAllocHandle, 0));
+        MURESULT_CHECK(muMemMap((MUdeviceptr) ptr, metadata.size, 0, newAllocHandle, 0));
 
-        CUDAUtils::cu_mem_set_access(ptr, metadata.size, metadata.device);
+        MUSAUtils::mu_mem_set_access(ptr, metadata.size, metadata.device);
 
         if (metadata.enable_cpu_backup) {
             SIMPLE_CHECK(metadata.cpu_backup != nullptr, "cpu_backup should not be nullptr");
-            // TODO may use cudaMemcpyAsync if needed
-            CUDA_ERROR_CHECK(cudaMemcpy(ptr, metadata.cpu_backup, metadata.size, cudaMemcpyHostToDevice));
+            // TODO may use musaMemcpyAsync if needed
+            MUSA_ERROR_CHECK(musaMemcpy(ptr, metadata.cpu_backup, metadata.size, musaMemcpyHostToDevice));
             // maybe we can free host memory if needed (currently keep it there to reduce re-alloc time)
         }
 

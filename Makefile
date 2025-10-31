@@ -6,7 +6,8 @@ SHELL=/bin/bash
 reinstall:
 	rm -rf ./*.so ./build
 	pip uninstall torch_memory_saver -y
-	pip install --no-cache-dir .
+	# pip install --no-build-isolation --no-cache-dir .  # <-- 关键修改在这里，添加了 --no-build-isolation
+	pip install --no-build-isolation --no-cache-dir -e .
 
 # Release
 # sudo make clean
