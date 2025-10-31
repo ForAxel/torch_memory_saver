@@ -4,6 +4,7 @@ import os
 from contextlib import contextmanager
 from typing import Optional
 import torch
+import torch_musa
 
 from .binary_wrapper import BinaryWrapper
 from .hooks.base import HookUtilBase, HookMode
@@ -12,6 +13,12 @@ logger = logging.getLogger(__name__)
 
 _TAG_DEFAULT = "default"
 
+def patch_after_import_torch():
+    # MemPool
+    torch.cuda.MemPool = torch.musa.MemPool
+    torch.cuda.use_mem_pool = torch.musa.use_mem_pool
+    torch.cuda.graph = torch.musa.graph
+patch_after_import_torch()
 
 class TorchMemorySaver:
     def __init__(self):
@@ -82,7 +89,9 @@ class _TorchMemorySaverImpl:
         self._hook_mode = hook_mode
         self._hook_util = HookUtilBase.create(hook_mode=hook_mode)
         self._binary_wrapper = BinaryWrapper(path_binary=self._hook_util.get_path_binary())
+        print(f"torch.cuda.MemPool is: {torch.cuda.MemPool}")
         self._primary_mem_pool = torch.cuda.MemPool(allocator=self._hook_util.get_allocator())
+        # self._primary_mem_pool = torch.musa.MemPool(allocator=self._hook_util.get_allocator())
         _sanity_checks()
 
     @contextmanager

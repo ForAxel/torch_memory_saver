@@ -49,7 +49,7 @@ namespace DeviceUtils {
 
 // Internal helper functions
 namespace {
-    void cu_mem_create_and_map(
+    void mu_mem_create_and_map(
         hipDevice_t device, 
         size_t aligned_size, 
         void* d_mem,
@@ -76,7 +76,7 @@ namespace {
 
         // Create memory handles for each chunk
         for (size_t i = 0; i < num_chunks; ++i) {
-            CURESULT_CHECK(hipMemCreate(&allocHandles[i], chunk_sizes[i], &prop, 0));
+            MURESULT_CHECK(hipMemCreate(&allocHandles[i], chunk_sizes[i], &prop, 0));
 #ifdef TMS_DEBUG_LOG
             std::cout << "[torch_memory_saver.cpp] allocHandles[" << i << "] = " << allocHandles[i] << std::endl;
 #endif
@@ -86,7 +86,7 @@ namespace {
         size_t allocated_size = 0;
         for (size_t i = 0; i < num_chunks; ++i) {
             void* map_addr = (void*)((uintptr_t)d_mem + allocated_size);
-            CURESULT_CHECK(hipMemMap((hipDeviceptr_t)map_addr, chunk_sizes[i], 0, allocHandles[i], 0));
+            MURESULT_CHECK(hipMemMap((hipDeviceptr_t)map_addr, chunk_sizes[i], 0, allocHandles[i], 0));
             allocated_size += chunk_sizes[i];
 #ifdef TMS_DEBUG_LOG
             std::cout << "[torch_memory_saver.cpp] mapped chunk " << i << " at offset " << allocated_size - chunk_sizes[i] << std::endl;
@@ -98,10 +98,10 @@ namespace {
         accessDesc.location.type = hipMemLocationTypeDevice;
         accessDesc.location.id = device;
         accessDesc.flags = hipMemAccessFlagsProtReadWrite;
-        CURESULT_CHECK(hipMemSetAccess(d_mem, aligned_size, &accessDesc, 1));
+        MURESULT_CHECK(hipMemSetAccess(d_mem, aligned_size, &accessDesc, 1));
     }
 
-    void cu_mem_unmap_and_release(
+    void mu_mem_unmap_and_release(
         hipDevice_t device,
         size_t aligned_size,
         hipDeviceptr_t d_mem,
@@ -112,7 +112,7 @@ namespace {
         size_t deallocated_size = 0;
         for (size_t i = 0; i < allocHandles.size(); ++i) {
             void* map_addr = (void*)((uintptr_t)d_mem + deallocated_size);
-            CURESULT_CHECK(hipMemUnmap((hipDeviceptr_t)map_addr, chunk_sizes[i]));
+            MURESULT_CHECK(hipMemUnmap((hipDeviceptr_t)map_addr, chunk_sizes[i]));
             deallocated_size += chunk_sizes[i];
 #ifdef TMS_DEBUG_LOG
             std::cout << "[torch_memory_saver.cpp] unmapped chunk " << i << " at offset " << deallocated_size - chunk_sizes[i] << std::endl;
@@ -121,7 +121,7 @@ namespace {
 
         // Release each handle
         for (size_t i = 0; i < allocHandles.size(); ++i) {
-            CURESULT_CHECK(hipMemRelease(allocHandles[i]));
+            MURESULT_CHECK(hipMemRelease(allocHandles[i]));
 #ifdef TMS_DEBUG_LOG
             std::cout << "[torch_memory_saver.cpp] released allocHandles[" << i << "]" << std::endl;
 #endif
@@ -130,9 +130,9 @@ namespace {
 }
 
 namespace ROCmHIPImplementation {
-    cudaError_t rocm_malloc(
+    musaError_t rocm_malloc(
         void **ptr, 
-        CUdevice device, 
+        MUdevice device, 
         size_t size, 
         const std::string& tag, 
         bool enable_cpu_backup,
@@ -140,7 +140,7 @@ namespace ROCmHIPImplementation {
         std::mutex& allocator_metadata_mutex
     ) {
         // Get device
-        CURESULT_CHECK(hipCtxGetDevice(&device));
+        MURESULT_CHECK(hipCtxGetDevice(&device));
 
         // Calculate aligned size
         hipMemAllocationProp prop = {};
@@ -150,7 +150,7 @@ namespace ROCmHIPImplementation {
         prop.allocFlags.compressionType = 0x0;
 
         size_t granularity;
-        CURESULT_CHECK(hipMemGetAllocationGranularity(&granularity, &prop,
+        MURESULT_CHECK(hipMemGetAllocationGranularity(&granularity, &prop,
                                                 hipMemAllocationGranularityMinimum));
         size_t aligned_size = ((size + granularity - 1) / granularity) * granularity;
         aligned_size = (aligned_size + MEMCREATE_CHUNK_SIZE - 1) / MEMCREATE_CHUNK_SIZE * MEMCREATE_CHUNK_SIZE;
@@ -167,7 +167,7 @@ namespace ROCmHIPImplementation {
         }
 
 #ifdef TMS_DEBUG_LOG
-        std::cout << "[torch_memory_saver.cpp] TorchMemorySaver.cuda_malloc "
+        std::cout << "[torch_memory_saver.cpp] TorchMemorySaver.musa_malloc "
                   << " ptr=" << ptr << " size=" << size
                   << " granularity=" << granularity
                   << " aligned_size=" << aligned_size
@@ -179,13 +179,13 @@ namespace ROCmHIPImplementation {
 
         // Reserve aligned memory address
         hipDeviceptr_t d_mem;
-        CURESULT_CHECK(hipMemAddressReserve(&d_mem, aligned_size, granularity, 0, node_id));
+        MURESULT_CHECK(hipMemAddressReserve(&d_mem, aligned_size, granularity, 0, node_id));
         *ptr = (void*)d_mem;
 
         // Create and map chunks
         std::vector<hipMemGenericAllocationHandle_t> allocHandles;
         std::vector<size_t> chunk_sizes;
-        cu_mem_create_and_map(device, aligned_size, (hipDeviceptr_t)*ptr, 
+        mu_mem_create_and_map(device, aligned_size, (hipDeviceptr_t)*ptr, 
                              allocHandles, chunk_sizes);
 
         // Store metadata
@@ -199,17 +199,17 @@ namespace ROCmHIPImplementation {
 
 #ifdef TMS_DEBUG_LOG
         size_t num_chunks = allocation_metadata[*ptr].allocHandles.size();
-        std::cout << "[torch_memory_saver.cpp] TorchMemorySaver.cuda_malloc "
+        std::cout << "[torch_memory_saver.cpp] TorchMemorySaver.musa_malloc "
                   << " ptr=" << ptr << " *ptr=" << *ptr << " size=" << size
                   << " aligned_size=" << aligned_size
                   << " num_chunks=" << num_chunks
                   << std::endl;
 #endif
 
-        return cudaSuccess;
+        return musaSuccess;
     }
 
-    cudaError_t rocm_free(
+    musaError_t rocm_free(
         void *ptr,
         std::unordered_map<void*, AllocationMetadata>& allocation_metadata,
         std::mutex& allocator_metadata_mutex
@@ -223,25 +223,25 @@ namespace ROCmHIPImplementation {
         }
 
         // Unmap and release chunks
-        cu_mem_unmap_and_release(metadata.device, metadata.size, (hipDeviceptr_t)ptr, metadata.allocHandles, metadata.chunk_sizes);
+        mu_mem_unmap_and_release(metadata.device, metadata.size, (hipDeviceptr_t)ptr, metadata.allocHandles, metadata.chunk_sizes);
 
         // Free the reserved address using stored aligned_size
-        CURESULT_CHECK(hipMemAddressFree((hipDeviceptr_t)ptr, metadata.aligned_size));
+        MURESULT_CHECK(hipMemAddressFree((hipDeviceptr_t)ptr, metadata.aligned_size));
 
         if (nullptr != metadata.cpu_backup) {
-            CUDA_ERROR_CHECK(hipFreeHost(metadata.cpu_backup));
+            MUSA_ERROR_CHECK(hipFreeHost(metadata.cpu_backup));
             metadata.cpu_backup = nullptr;
         }
 
 #ifdef TMS_DEBUG_LOG
-        std::cout << "[torch_memory_saver.cpp] TorchMemorySaver.cuda_free "
+        std::cout << "[torch_memory_saver.cpp] TorchMemorySaver.musa_free "
                   << " ptr=" << ptr << " size=" << metadata.size
                   << " aligned_size=" << metadata.aligned_size
                   << " num_chunks=" << metadata.allocHandles.size()
                   << std::endl;
 #endif
 
-        return cudaSuccess;
+        return musaSuccess;
     }
 
     void rocm_pause(
@@ -270,14 +270,14 @@ namespace ROCmHIPImplementation {
             // Copy data to CPU backup if enabled
             if (metadata.enable_cpu_backup) {
                 if (nullptr == metadata.cpu_backup) {
-                    CUDA_ERROR_CHECK(hipMallocHost(&metadata.cpu_backup, metadata.aligned_size));
+                    MUSA_ERROR_CHECK(hipMallocHost(&metadata.cpu_backup, metadata.aligned_size));
                 }
                 SIMPLE_CHECK(metadata.cpu_backup != nullptr, "cpu_backup should not be nullptr");
-                CUDA_ERROR_CHECK(cudaMemcpy(metadata.cpu_backup, ptr, metadata.aligned_size, hipMemcpyDeviceToHost));
+                MUSA_ERROR_CHECK(musaMemcpy(metadata.cpu_backup, ptr, metadata.aligned_size, hipMemcpyDeviceToHost));
             }
 
             // Unmap and release chunks (but keep metadata for resume)
-            cu_mem_unmap_and_release(metadata.device, metadata.aligned_size, (hipDeviceptr_t)ptr, metadata.allocHandles, metadata.chunk_sizes);
+            mu_mem_unmap_and_release(metadata.device, metadata.aligned_size, (hipDeviceptr_t)ptr, metadata.allocHandles, metadata.chunk_sizes);
 
             metadata.state = AllocationState::PAUSED;
 
@@ -317,12 +317,12 @@ namespace ROCmHIPImplementation {
             }
 
             // Create new handles and map chunks
-            cu_mem_create_and_map(metadata.device, metadata.aligned_size, (hipDeviceptr_t)ptr, metadata.allocHandles, metadata.chunk_sizes);
+            mu_mem_create_and_map(metadata.device, metadata.aligned_size, (hipDeviceptr_t)ptr, metadata.allocHandles, metadata.chunk_sizes);
 
             // Restore from CPU backup if enabled
             if (metadata.enable_cpu_backup) {
                 SIMPLE_CHECK(metadata.cpu_backup != nullptr, "cpu_backup should not be nullptr");
-                CUDA_ERROR_CHECK(cudaMemcpy(ptr, metadata.cpu_backup, metadata.aligned_size, hipMemcpyHostToDevice));
+                MUSA_ERROR_CHECK(musaMemcpy(ptr, metadata.cpu_backup, metadata.aligned_size, hipMemcpyHostToDevice));
             }
 
             metadata.state = AllocationState::ACTIVE;

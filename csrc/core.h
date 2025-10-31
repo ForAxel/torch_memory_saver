@@ -20,14 +20,14 @@ enum class AllocationState {
 
 struct AllocationMetadata {
     size_t size;
-    CUdevice device;
+    MUdevice device;
     std::string tag;
     AllocationState state;
     bool enable_cpu_backup;
     void* cpu_backup;
 
 #if defined(USE_CUDA)
-    CUmemGenericAllocationHandle allocHandle;
+    MUmemGenericAllocationHandle allocHandle;
 #elif defined(USE_ROCM)
     size_t aligned_size;
     std::vector<hipMemGenericAllocationHandle_t> allocHandles;
@@ -41,8 +41,8 @@ class TorchMemorySaver {
 public:
     static TorchMemorySaver& instance();
 
-    cudaError_t malloc(void** ptr, CUdevice device, size_t size, const std::string& tag, bool enable_cpu_backup);
-    cudaError_t free(void* ptr);
+    musaError_t malloc(void** ptr, MUdevice device, size_t size, const std::string& tag, bool enable_cpu_backup);
+    musaError_t free(void* ptr);
 
     void pause(const std::string& tag);
     void resume(const std::string& tag);
