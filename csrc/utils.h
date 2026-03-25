@@ -25,13 +25,13 @@
     } \
   } while (false)
 
-#define CURESULT_CHECK(EXPR) \
+#define MURESULT_CHECK(EXPR) \
   do { \
-    CUresult __result = (EXPR); \
-    if (__result != CUDA_SUCCESS) { \
+    MUresult __result = (EXPR); \
+    if (__result != MUSA_SUCCESS) { \
         const char* err_str = nullptr; \
-        cuGetErrorString(__result, &err_str); \
-        std::cerr << "[torch_memory_saver.cpp] CUresult error: " \
+        muGetErrorString(__result, &err_str); \
+        std::cerr << "[torch_memory_saver.cpp] MUresult error: " \
                   << __result << " (" << (err_str ? err_str : "Unknown error") << ") " \
                   << " file=" << __FILE__ << " func=" << __func__ << " line=" << __LINE__ \
                   << std::endl; \
@@ -39,12 +39,12 @@
     } \
   } while (false)
 
-#define CUDA_ERROR_CHECK(EXPR) \
+#define MUSA_ERROR_CHECK(EXPR) \
   do { \
-    cudaError_t __result = (EXPR); \
-    if (__result != cudaSuccess) { \
-        const char* err_str = cudaGetErrorString(__result); \
-        std::cerr << "[torch_memory_saver.cpp] cudaError error: " \
+    musaError_t __result = (EXPR); \
+    if (__result != musaSuccess) { \
+        const char* err_str = musaGetErrorString(__result); \
+        std::cerr << "[torch_memory_saver.cpp] musaError error: " \
                   << __result << " (" << (err_str ? err_str : "Unknown error") << ") " \
                   << " file=" << __FILE__ << " func=" << __func__ << " line=" << __LINE__ \
                   << std::endl; \
@@ -53,7 +53,7 @@
   } while (false)
 
 
-namespace CUDAUtils {
+namespace MUSAUtils {
 #if defined(USE_ROCM)
 
     #if HIP_VERSION < 60304000 // rocm/hip 6.3.4
@@ -62,22 +62,22 @@ namespace CUDAUtils {
         #if TMS_ROCM_LEGACY_CHUNKED
             #pragma message "Using ROCm/HIP 6.x implementation (chunked allocation workaround)"
         #else
-            #pragma message "Using ROCm/HIP >= 7.0 implementation (single allocation, same as CUDA)"
+            #pragma message "Using ROCm/HIP >= 7.0 implementation (single allocation, same as MUSA)"
         #endif
 
-        static CUdevice cu_ctx_get_device() {
+        static MUdevice mu_ctx_get_device() {
             int device;
-            CUDA_ERROR_CHECK(hipGetDevice(&device));
-            return static_cast<CUdevice>(device);
+            MUSA_ERROR_CHECK(hipGetDevice(&device));
+            return static_cast<MUdevice>(device);
         }
 
-        static CUdevice cu_device_get(int device_ordinal) {
-            CUdevice ans;
-            CURESULT_CHECK(hipDeviceGet(&ans, device_ordinal));
+        static MUdevice mu_device_get(int device_ordinal) {
+            MUdevice ans;
+            MURESULT_CHECK(hipDeviceGet(&ans, device_ordinal));
             return ans;
         }
 
-        static cudaError_t cu_mem_create(CUmemGenericAllocationHandle *alloc_handle, size_t size, CUdevice device) {
+        static musaError_t mu_mem_create(MUmemGenericAllocationHandle *alloc_handle, size_t size, MUdevice device) {
             hipMemAllocationProp prop = {};
             prop.type = hipMemAllocationTypePinned;
             prop.location.type = hipMemLocationTypeDevice;
@@ -89,60 +89,60 @@ namespace CUDAUtils {
                 std::cerr << "[torch_memory_saver.cpp] hipMemCreate hipErrorOutOfMemory (may not be an issue e.g. torch allocator will free cache and retry)" << std::endl;
                 return hipErrorOutOfMemory;
             }
-            CURESULT_CHECK(ret);
+            MURESULT_CHECK(ret);
 
             return hipSuccess;
         }
 
-        static void cu_mem_set_access(void *ptr, size_t size, CUdevice device) {
+        static void mu_mem_set_access(void *ptr, size_t size, MUdevice device) {
             hipMemAccessDesc accessDesc = {};
             accessDesc.location.type = hipMemLocationTypeDevice;
             accessDesc.location.id = device;
             accessDesc.flags = hipMemAccessFlagsProtReadWrite;
-            CURESULT_CHECK(hipMemSetAccess(ptr, size, &accessDesc, 1));
+            MURESULT_CHECK(hipMemSetAccess(ptr, size, &accessDesc, 1));
         }
     #endif
 
-#elif defined(USE_CUDA)
-    static cudaError_t cu_mem_create(CUmemGenericAllocationHandle *alloc_handle, size_t size, CUdevice device) {
-        CUmemAllocationProp prop = {};
-        prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
-        prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+#elif defined(USE_MUSA)
+    static musaError_t mu_mem_create(MUmemGenericAllocationHandle *alloc_handle, size_t size, MUdevice device) {
+        MUmemAllocationProp prop = {};
+        prop.type = MU_MEM_ALLOCATION_TYPE_PINNED;
+        prop.location.type = MU_MEM_LOCATION_TYPE_DEVICE;
         prop.location.id = device;
 
         int flag = 0;
-        CURESULT_CHECK(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, device));
+        MURESULT_CHECK(muDeviceGetAttribute(&flag, MU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_MUSA_VMM_SUPPORTED, device));
         if (flag) {  // support GPUDirect RDMA if possible
             prop.allocFlags.gpuDirectRDMACapable = 1;
         }
 
-        CUresult ret = cuMemCreate(alloc_handle, size, &prop, 0);
-        if (ret == CUDA_ERROR_OUT_OF_MEMORY) {
-            std::cerr << "[torch_memory_saver.cpp] cuMemCreate CUDA_ERROR_OUT_OF_MEMORY (may not be an issue e.g. torch allocator will free cache and retry)" << std::endl;
-            return cudaErrorMemoryAllocation;
+        MUresult ret = muMemCreate(alloc_handle, size, &prop, 0);
+        if (ret == MUSA_ERROR_OUT_OF_MEMORY) {
+            std::cerr << "[torch_memory_saver.cpp] muMemCreate MUSA_ERROR_OUT_OF_MEMORY (may not be an issue e.g. torch allocator will free cache and retry)" << std::endl;
+            return musaErrorMemoryAllocation;
         }
-        CURESULT_CHECK(ret);
+        MURESULT_CHECK(ret);
 
-        return cudaSuccess;
+        return musaSuccess;
     }
 
-    static void cu_mem_set_access(void *ptr, size_t size, CUdevice device) {
-        CUmemAccessDesc access_desc = {};
-        access_desc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    static void mu_mem_set_access(void *ptr, size_t size, MUdevice device) {
+        MUmemAccessDesc access_desc = {};
+        access_desc.location.type = MU_MEM_LOCATION_TYPE_DEVICE;
         access_desc.location.id = device;
-        access_desc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
-        CURESULT_CHECK(cuMemSetAccess((CUdeviceptr) ptr, size, &access_desc, 1));
+        access_desc.flags = MU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+        MURESULT_CHECK(muMemSetAccess((MUdeviceptr) ptr, size, &access_desc, 1));
     }
 
-    static CUdevice cu_ctx_get_device() {
-        CUdevice ans;
-        CURESULT_CHECK(cuCtxGetDevice(&ans));
+    static MUdevice mu_ctx_get_device() {
+        MUdevice ans;
+        MURESULT_CHECK(muCtxGetDevice(&ans));
         return ans;
     }
 
-    static CUdevice cu_device_get(int device_ordinal) {
-        CUdevice ans;
-        CURESULT_CHECK(cuDeviceGet(&ans, device_ordinal));
+    static MUdevice mu_device_get(int device_ordinal) {
+        MUdevice ans;
+        MURESULT_CHECK(muDeviceGet(&ans, device_ordinal));
         return ans;
     }
 

@@ -13,38 +13,38 @@
  * - CUDA Runtime API to HIP: https://rocm.docs.amd.com/projects/HIPIFY/en/latest/reference/tables/CUDA_Runtime_API_functions_supported_by_HIP.html
  */
 // --- Error Handling Types and Constants ---
-#define CUresult hipError_t
-#define cudaError_t hipError_t
-#define CUDA_SUCCESS hipSuccess
-#define cudaSuccess hipSuccess
+#define MUresult hipError_t
+#define musaError_t hipError_t
+#define MUSA_SUCCESS hipSuccess
+#define musaSuccess hipSuccess
 // --- Error Reporting Functions ---
-#define cuGetErrorString hipDrvGetErrorString
-#define cudaGetErrorString hipGetErrorString
+#define muGetErrorString hipDrvGetErrorString
+#define musaGetErrorString hipGetErrorString
 // --- Memory Management Functions ---
-#define CUdeviceptr hipDeviceptr_t
-#define cuMemGetAllocationGranularity hipMemGetAllocationGranularity
-#define cuMemAddressReserve hipMemAddressReserve
-#define cuMemAddressFree hipMemAddressFree
-#define cuMemMap hipMemMap
-#define cuMemUnmap hipMemUnmap
-#define cuMemRelease hipMemRelease
-#define cudaMalloc hipMalloc
-#define cudaFree hipFree
-#define cudaMallocHost hipHostMalloc
-#define cudaFreeHost hipFreeHost
-#define cudaMemcpy hipMemcpy
-#define cudaMemGetInfo hipMemGetInfo
-#define cudaDeviceSynchronize hipDeviceSynchronize
+#define MUdeviceptr hipDeviceptr_t
+#define muMemGetAllocationGranularity hipMemGetAllocationGranularity
+#define muMemAddressReserve hipMemAddressReserve
+#define muMemAddressFree hipMemAddressFree
+#define muMemMap hipMemMap
+#define muMemUnmap hipMemUnmap
+#define muMemRelease hipMemRelease
+#define musaMalloc hipMalloc
+#define musaFree hipFree
+#define musaMallocHost hipHostMalloc
+#define musaFreeHost hipFreeHost
+#define musaMemcpy hipMemcpy
+#define musaMemGetInfo hipMemGetInfo
+#define musaDeviceSynchronize hipDeviceSynchronize
 // --- Memory Copy Direction Constants ---
-#define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
-#define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define musaMemcpyDeviceToHost hipMemcpyDeviceToHost
+#define musaMemcpyHostToDevice hipMemcpyHostToDevice
 // --- Device and Stream Types ---
-#define CUdevice hipDevice_t
-#define cudaStream_t hipStream_t
+#define MUdevice hipDevice_t
+#define musaStream_t hipStream_t
 // --- Error codes ---
-#define cudaErrorMemoryAllocation hipErrorOutOfMemory
+#define musaErrorMemoryAllocation hipErrorOutOfMemory
 // --- Memory Allocation Handle ---
-#define CUmemGenericAllocationHandle hipMemGenericAllocationHandle_t
+#define MUmemGenericAllocationHandle hipMemGenericAllocationHandle_t
 // --- Chunk size for memory creation operations (2 MB) ---
 #define MEMCREATE_CHUNK_SIZE (2 * 1024 * 1024)
 // --- Utility Macros ---
@@ -59,9 +59,9 @@
     #define TMS_ROCM_LEGACY_CHUNKED 0
 #endif
 
-#elif defined(USE_CUDA)
-#include <cuda_runtime_api.h>
-#include <cuda.h>
+#elif defined(USE_MUSA)
+#include <musa_runtime_api.h>
+#include <musa.h>
 
 #define TMS_ROCM_LEGACY_CHUNKED 0
 

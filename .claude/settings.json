@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/torch_memory_saver/**)"
+    ]
+  }
+}

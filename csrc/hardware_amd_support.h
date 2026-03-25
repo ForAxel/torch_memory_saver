@@ -23,9 +23,9 @@ namespace DeviceUtils {
 // High-level ROCm implementation functions
 namespace ROCmHIPImplementation {
     // Malloc implementation for ROCm
-    cudaError_t rocm_malloc(
+    musaError_t rocm_malloc(
         void **ptr, 
-        CUdevice device, 
+        MUdevice device, 
         size_t size, 
         const std::string& tag, 
         bool enable_cpu_backup,
@@ -34,7 +34,7 @@ namespace ROCmHIPImplementation {
     );
     
     // Free implementation for ROCm
-    cudaError_t rocm_free(
+    musaError_t rocm_free(
         void *ptr,
         std::unordered_map<void*, AllocationMetadata>& allocation_metadata,
         std::mutex& allocator_metadata_mutex

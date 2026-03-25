@@ -8,6 +8,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from typing import Optional
 import torch
+import torch_musa
 
 from .binary_wrapper import BinaryWrapper
 from .hooks.base import HookUtilBase, HookMode
@@ -15,6 +16,14 @@ from .hooks.base import HookUtilBase, HookMode
 logger = logging.getLogger(__name__)
 
 _TAG_DEFAULT = "default"
+
+
+def patch_after_import_torch():
+    # MemPool
+    torch.cuda.MemPool = torch.musa.MemPool
+    torch.cuda.use_mem_pool = torch.musa.use_mem_pool
+    torch.cuda.graph = torch.musa.graph
+patch_after_import_torch()
 
 
 class TorchMemorySaver:
@@ -169,7 +178,7 @@ class _TorchMemorySaverImpl:
         self._binary_wrapper.cdll.tms_resume(tag_bytes)
 
     def get_cpu_backup(self, x: torch.Tensor, zero_copy: bool = False):
-        assert x.is_cuda, f"{x.device=}"
+        assert x.device.type in ("cuda", "musa"), f"{x.device=}"
         assert x.is_contiguous(), f"{x.shape=} {x.stride()=} {x.dtype=}"
 
         nbytes = x.nbytes
